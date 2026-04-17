@@ -1,8 +1,15 @@
 from unittest.mock import Mock, patch
+from types import SimpleNamespace
 
 from selenium.webdriver.common.by import By
 
-from scraper import build_driver, is_captcha_page, transfer_cookies
+from scraper import (
+    build_driver,
+    is_captcha_page,
+    is_running_in_jupyter,
+    transfer_cookies,
+    wait_for_user_confirmation,
+)
 
 
 def test_is_captcha_page_detects_sorry_url():
@@ -71,3 +78,31 @@ def test_build_driver_headless_sets_expected_flags(
     assert "--window-size=1920,1080" in args
     assert "--disable-blink-features=AutomationControlled" in args
     mock_service.assert_called_once_with("chromedriver.exe")
+
+
+@patch.dict("sys.modules", {}, clear=False)
+def test_is_running_in_jupyter_true_for_zmq_shell():
+    shell = Mock()
+    shell.__class__.__name__ = "ZMQInteractiveShell"
+    fake_ipython = SimpleNamespace(get_ipython=lambda: shell)
+    with patch.dict("sys.modules", {"IPython": fake_ipython}, clear=False):
+        assert is_running_in_jupyter() is True
+
+
+@patch.dict("sys.modules", {}, clear=False)
+def test_is_running_in_jupyter_false_for_other_shell():
+    shell = Mock()
+    shell.__class__.__name__ = "TerminalInteractiveShell"
+    fake_ipython = SimpleNamespace(get_ipython=lambda: shell)
+    with patch.dict("sys.modules", {"IPython": fake_ipython}, clear=False):
+        assert is_running_in_jupyter() is False
+
+
+@patch.dict("sys.modules", {"IPython": None}, clear=False)
+def test_is_running_in_jupyter_false_when_ipython_missing():
+    assert is_running_in_jupyter() is False
+
+
+@patch("builtins.input", return_value="ok")
+def test_wait_for_user_confirmation_calls_input_once(_):
+    wait_for_user_confirmation("Potwierdź", jupyter_mode=False)
