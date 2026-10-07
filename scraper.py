@@ -1,4 +1,5 @@
 import csv
+import os
 import re
 import time
 import json
@@ -17,7 +18,8 @@ from webdriver_manager.chrome import ChromeDriverManager
 # =========================
 # KONFIG
 # =========================
-OUTPUT_DIR = Path(r"C:\Users\kanbu\Documents\Budowy")
+_DEFAULT_OUTPUT = Path(r"C:\Users\kanbu\Documents\Budowy")
+OUTPUT_DIR = Path(os.environ.get("SCRAPER_OUTPUT_DIR", str(_DEFAULT_OUTPUT)))
 OUTPUT_FILE = OUTPUT_DIR / "germany_markets_selenium_closed_only.csv"
 CACHE_FILE = OUTPUT_DIR / "germany_markets_cache.json"
 LOG_FILE = OUTPUT_DIR / "germany_markets_scraper.log"
@@ -34,6 +36,7 @@ MAX_SCROLL_ROUNDS = 25
 SCROLL_PAUSE = 1.0
 HEADLESS_DEFAULT = True
 CAPTCHA_CHECK_TIMEOUT = 600  # sekundy
+SMOKE_MODE = os.environ.get("SCRAPER_SMOKE", "").strip().lower() in {"1", "true", "yes"}
 
 
 class CaptchaRequired(Exception):
@@ -195,6 +198,10 @@ def build_driver(headless=True):
     else:
         options.add_argument("--start-maximized")
     options.add_argument("--disable-blink-features=AutomationControlled")
+    # Stabilność na CI / Linux (GitHub Actions)
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
     return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
 
@@ -594,11 +601,17 @@ def run_scraper(headless_default=HEADLESS_DEFAULT, jupyter_mode=None):
     cache = load_cache(logger)
 
     try:
-        grid_points = [
-            (lat, lon)
-            for lat in frange(LAT_MIN, LAT_MAX, LAT_STEP)
-            for lon in frange(LON_MIN, LON_MAX, LON_STEP)
-        ]
+        brands = BRANDS
+        if SMOKE_MODE:
+            brands = [BRANDS[0]]
+            grid_points = [(52.52, 13.405)]  # Berlin – szybki test CI
+            logger.info("SCRAPER_SMOKE=1 – ograniczona siatka (1 punkt, 1 marka)")
+        else:
+            grid_points = [
+                (lat, lon)
+                for lat in frange(LAT_MIN, LAT_MAX, LAT_STEP)
+                for lon in frange(LON_MIN, LON_MAX, LON_STEP)
+            ]
         logger.info(f"Punktów siatki: {len(grid_points)}")
         print(f"Punktów siatki: {len(grid_points)}")
 
@@ -606,7 +619,7 @@ def run_scraper(headless_default=HEADLESS_DEFAULT, jupyter_mode=None):
             logger.info(f"=== Komórka {idx}/{len(grid_points)} | lat={lat}, lon={lon} ===")
             print(f"\n=== Komórka {idx}/{len(grid_points)} | lat={lat}, lon={lon} ===")
 
-            for brand in BRANDS:
+            for brand in brands:
                 captcha_retries = 0
                 while True:
                     try:

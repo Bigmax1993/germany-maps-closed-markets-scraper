@@ -64,3 +64,19 @@ python -m pytest tests/test_status_parsing.py tests/test_captcha_and_driver.py
 ```
 
 Skrypt można wznawiać – wykorzystuje istniejący CSV i cache JSON, dzięki czemu nie pobiera ponownie już znanych miejsc.
+
+## GitHub Actions
+
+### CI
+Przy każdym pushu/PR na `master` uruchamiane są testy `pytest` (Python 3.10–3.12).
+
+### Scrape & Deploy Artifacts
+Workflow **Scrape & Deploy Artifacts**:
+- ręcznie: Actions → *Scrape & Deploy Artifacts* → *Run workflow*
+- automatycznie: niedziela 03:00 UTC
+
+Wyniki (CSV, cache, logi) trafiają do **Artifacts** w runie workflow.
+
+Zmienna `SCRAPER_OUTPUT_DIR` ustawia katalog wyników (na Actions: `./output`).  
+`SCRAPER_SMOKE=1` ogranicza przebieg do 1 punktu / 1 marki (przydatne na CI – Google Maps często blokuje CAPTCHA z runnerów).
+

@@ -1,0 +1,60 @@
+name: Scrape & Deploy Artifacts
+
+on:
+  schedule:
+    # Co niedzielę o 03:00 UTC
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      smoke:
+        description: "Smoke mode (1 punkt siatki, 1 marka) – bezpieczniejsze na CI"
+        type: boolean
+        default: true
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Google Chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run scraper
+        env:
+          SCRAPER_OUTPUT_DIR: ${{ github.workspace }}/output
+        run: |
+          mkdir -p "$SCRAPER_OUTPUT_DIR"
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            export SCRAPER_SMOKE=0
+          elif [ "${{ inputs.smoke }}" = "true" ]; then
+            export SCRAPER_SMOKE=1
+          else
+            export SCRAPER_SMOKE=0
+          fi
+          echo "SCRAPER_SMOKE=$SCRAPER_SMOKE"
+          python scraper.py
+
+      - name: Upload CSV / cache / logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: germany-markets-scrape-${{ github.run_id }}
+          path: output/
+          if-no-files-found: warn
+          retention-days: 30
